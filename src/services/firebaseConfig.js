@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   RECEIPTS: 'bismillah_receipts_v1',
   RECEIPT_COUNTER: 'bismillah_receipt_counter_v1',
   FIREBASE_CONFIG: 'bismillah_firebase_config_v1',
+  ADMIN_PASSWORD: 'bismillah_admin_pass_v1',
   CART: 'bismillah_customer_cart_v1'
 };
 
@@ -25,6 +26,7 @@ let receiptsListeners = [];
 let adminPasswordListeners = [];
 let cachedAdminPassword = null;
 let isFirebaseAutoIniting = false;
+let firebaseInitPromise = null;
 
 // Dynamic Firebase module loader
 async function getFirestoreModule() {
@@ -165,8 +167,9 @@ export function initLocalStorage() {
     localStorage.setItem(STORAGE_KEYS.RECEIPTS, JSON.stringify(demoReceipts));
   }
 
-  // Clean up any legacy admin password stored in localStorage
-  localStorage.removeItem('bismillah_admin_pass_v1');
+  if (!localStorage.getItem(STORAGE_KEYS.ADMIN_PASSWORD)) {
+    localStorage.setItem(STORAGE_KEYS.ADMIN_PASSWORD, DEFAULT_ADMIN_PASSWORD);
+  }
 }
 
 // Shared Receipt Counter: Atomically fetch and increment the next number
@@ -595,6 +598,10 @@ function notifyAdminPasswordChanged(newPassword) {
 
 // Fetch admin password from Firestore settings/admin doc
 export async function getFirestoreAdminPassword() {
+  if (firebaseInitPromise) {
+    try { await firebaseInitPromise; } catch (e) {}
+  }
+
   if (isFirestoreActive && firestoreDb) {
     try {
       const { doc, getDoc, setDoc } = await getFirestoreModule();
@@ -605,6 +612,7 @@ export async function getFirestoreAdminPassword() {
         const pass = data?.adminPassword;
         if (pass) {
           cachedAdminPassword = pass;
+          try { localStorage.setItem(STORAGE_KEYS.ADMIN_PASSWORD, pass); } catch (e) {}
           return pass;
         }
       }
@@ -616,14 +624,18 @@ export async function getFirestoreAdminPassword() {
       };
       await setDoc(adminDocRef, defaultData);
       cachedAdminPassword = DEFAULT_ADMIN_PASSWORD;
+      try { localStorage.setItem(STORAGE_KEYS.ADMIN_PASSWORD, DEFAULT_ADMIN_PASSWORD); } catch (e) {}
       return DEFAULT_ADMIN_PASSWORD;
     } catch (err) {
       console.warn("Could not read admin password from Firestore:", err);
     }
   }
 
-  // Fallback in-memory cache or default
-  return cachedAdminPassword || DEFAULT_ADMIN_PASSWORD;
+  // Fallback in-memory cache or local storage or default
+  const localSaved = (() => {
+    try { return localStorage.getItem(STORAGE_KEYS.ADMIN_PASSWORD); } catch (e) { return null; }
+  })();
+  return cachedAdminPassword || localSaved || DEFAULT_ADMIN_PASSWORD;
 }
 
 // Update admin password in Firestore settings/admin doc across all devices
@@ -632,6 +644,11 @@ export async function setFirestoreAdminPassword(newPassword) {
     throw new Error("Password must be at least 4 characters long.");
   }
   const cleanPassword = newPassword.trim();
+
+  // Always save in localStorage as offline fallback
+  try {
+    localStorage.setItem(STORAGE_KEYS.ADMIN_PASSWORD, cleanPassword);
+  } catch (e) {}
 
   if (isFirestoreActive && firestoreDb) {
     const { doc, setDoc } = await getFirestoreModule();
@@ -649,6 +666,9 @@ export async function setFirestoreAdminPassword(newPassword) {
 // Verify entered password against Firestore settings/admin
 export async function verifyAdminPassword(enteredPassword) {
   if (!enteredPassword) return false;
+  if (firebaseInitPromise) {
+    try { await firebaseInitPromise; } catch (e) {}
+  }
   // Always fetch fresh from Firestore
   const current = await getFirestoreAdminPassword();
   return enteredPassword.trim() === current.trim();
@@ -788,25 +808,40 @@ export async function initFirebaseWithConfig(config) {
 }
 
 // Auto-initialize Firebase from code config or saved local storage
-export async function initFirebaseAuto() {
-  if (isFirebaseAutoIniting) return;
-  isFirebaseAutoIniting = true;
-  try {
-    let cfg = null;
-    if (DEFAULT_FIREBASE_CONFIG && DEFAULT_FIREBASE_CONFIG.apiKey && DEFAULT_FIREBASE_CONFIG.projectId) {
-      cfg = DEFAULT_FIREBASE_CONFIG;
-    } else {
-      cfg = getSavedFirebaseConfig();
+export function initFirebaseAuto() {
+  if (firebaseInitPromise) return firebaseInitPromise;
+
+  firebaseInitPromise = (async () => {
+    isFirebaseAutoIniting = true;
+    try {
+      let cfg = null;
+      if (DEFAULT_FIREBASE_CONFIG && DEFAULT_FIREBASE_CONFIG.apiKey && DEFAULT_FIREBASE_CONFIG.projectId) {
+        cfg = DEFAULT_FIREBASE_CONFIG;
+      } else {
+        cfg = getSavedFirebaseConfig();
+      }
+      if (cfg && cfg.apiKey && cfg.projectId) {
+        return await initFirebaseWithConfig(cfg);
+      }
+    } catch (e) {
+      console.warn("Auto-init Firebase skipped:", e);
+    } finally {
+      isFirebaseAutoIniting = false;
     }
-    if (cfg && cfg.apiKey && cfg.projectId) {
-      return await initFirebaseWithConfig(cfg);
-    }
-  } catch (e) {
-    console.warn("Auto-init Firebase skipped:", e);
-  } finally {
-    isFirebaseAutoIniting = false;
+    return { success: false, message: "No active Firebase configuration found." };
+  })();
+
+  return firebaseInitPromise;
+}
+
+// Helper to await background Firebase initialization
+export async function waitForFirebaseInit() {
+  if (firebaseInitPromise) {
+    try {
+      await firebaseInitPromise;
+    } catch (e) {}
   }
-  return { success: false, message: "No active Firebase configuration found." };
+  return isFirestoreActive;
 }
 
 // Auto-init local store & attempt Firebase connection

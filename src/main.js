@@ -24,7 +24,8 @@ import {
   subscribeAdminPassword,
   getSavedFirebaseConfig,
   initFirebaseWithConfig,
-  isFirebaseConnected
+  isFirebaseConnected,
+  waitForFirebaseInit
 } from './services/firebaseConfig.js';
 import {
   SHOP_RECEIPT_CONFIG,
@@ -710,9 +711,9 @@ function renderApp() {
           <p style="font-size: 0.85rem; color: var(--text-secondary);">
             Enter store manager password to access POS billing, receipts, daily reports, and product catalog.
           </p>
-          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 0.78rem; color: #166534; display: flex; align-items: center; gap: 6px;">
+          <div id="login-connection-badge" style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 0.78rem; color: #166534; display: flex; align-items: center; gap: 6px;">
             <span>☁️</span>
-            <span>Firestore live verified across all devices. Default: <strong>admin123</strong></span>
+            <span id="login-connection-text">Verifying Firestore connection...</span>
           </div>
           <form id="admin-login-form">
             <div class="form-group">
@@ -1355,7 +1356,23 @@ async function handleCheckoutSubmit(e) {
 // ==========================================================================
 // ADMIN PANEL (PASSWORD PROTECTED) & POS
 // ==========================================================================
-function openAdminLoginModal() {
+function updateLoginConnectionBadge() {
+  const badge = document.getElementById('login-connection-badge');
+  if (!badge) return;
+  if (isFirebaseConnected()) {
+    badge.style.background = '#f0fdf4';
+    badge.style.border = '1px solid #bbf7d0';
+    badge.style.color = '#166534';
+    badge.innerHTML = `<span>🟢</span><span>Connected to Firestore (Live synced across devices)</span>`;
+  } else {
+    badge.style.background = '#fffbeb';
+    badge.style.border = '1px solid #fef3c7';
+    badge.style.color = '#92400e';
+    badge.innerHTML = `<span>⚠️</span><span>Offline / Local Mode (Firebase not connected on this device. Default: <strong>admin123</strong>)</span>`;
+  }
+}
+
+async function openAdminLoginModal() {
   const modal = document.getElementById('admin-login-modal');
   const errorMsg = document.getElementById('login-error-msg');
   if (errorMsg) errorMsg.style.display = 'none';
@@ -1363,8 +1380,12 @@ function openAdminLoginModal() {
   if (input) input.value = '';
   modal?.classList.add('active');
   input?.focus();
-  // Pre-fetch password from Firestore in the background
-  getFirestoreAdminPassword().catch(() => {});
+
+  updateLoginConnectionBadge();
+  waitForFirebaseInit().then(() => {
+    updateLoginConnectionBadge();
+    getFirestoreAdminPassword().catch(() => {});
+  });
 }
 
 function closeAdminLoginModal() {
@@ -1383,10 +1404,12 @@ async function handleAdminLogin(e) {
 
   if (btn) {
     btn.disabled = true;
-    btn.textContent = 'Verifying with Firestore...';
+    btn.textContent = 'Verifying password...';
   }
 
   try {
+    await waitForFirebaseInit();
+    updateLoginConnectionBadge();
     const isValid = await verifyAdminPassword(input);
     if (isValid) {
       state.adminLoggedIn = true;
@@ -1396,7 +1419,11 @@ async function handleAdminLogin(e) {
       showToast("Welcome to Admin & POS Dashboard!", "success");
     } else {
       if (errorMsg) {
-        errorMsg.textContent = "Incorrect password. Please enter the current admin password.";
+        if (!isFirebaseConnected()) {
+          errorMsg.innerHTML = "Incorrect password.<br/><span style='display:inline-block;margin-top:6px;font-size:0.78rem;line-height:1.4;'>⚠️ <strong>Firebase is not connected on this device yet.</strong><br/>Please log in using default password <strong>admin123</strong>, then connect Firebase in Settings.</span>";
+        } else {
+          errorMsg.textContent = "Incorrect password. Please enter the current admin password.";
+        }
         errorMsg.style.display = 'block';
       }
       inputEl.focus();
@@ -1704,9 +1731,15 @@ function renderAdminView() {
       <!-- SETTINGS & FIREBASE TAB -->
       ${state.adminTab === 'settings' ? `
         <div class="admin-card-box" style="padding: 22px;">
-          <h3 style="margin-bottom: 12px;">🔥 Firebase Firestore Database Setup</h3>
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+            <h3 style="margin-bottom: 0;">🔥 Firebase Firestore Database Setup</h3>
+            <span style="display: inline-flex; align-items: center; gap: 6px; background: ${isFirebaseConnected() ? '#ecfdf5' : '#fffbeb'}; color: ${isFirebaseConnected() ? '#065f46' : '#92400e'}; border: 1px solid ${isFirebaseConnected() ? '#a7f3d0' : '#fef3c7'}; padding: 4px 12px; border-radius: 999px; font-size: 0.8rem; font-weight: 700;">
+              <span>${isFirebaseConnected() ? '🟢' : '⚠️'}</span>
+              <span>${isFirebaseConnected() ? 'Connected to Cloud Firestore' : 'Offline Mode (Local Storage)'}</span>
+            </span>
+          </div>
           <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 16px;">
-            Connect Google Firebase Firestore to keep product stock, price changes, and customer receipts automatically synchronized across all shop phones and laptops.
+            Connect Google Firebase Firestore to keep product stock, price changes, admin password, and customer receipts automatically synchronized across all shop phones and laptops.
           </p>
 
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: var(--radius-md); padding: 16px; margin-bottom: 20px;">
@@ -1714,7 +1747,7 @@ function renderAdminView() {
             <ol style="padding-left: 20px; font-size: 0.85rem; color: #475569; display: flex; flex-direction: column; gap: 6px;">
               <li>Visit <a href="https://console.firebase.google.com" target="_blank" style="color: var(--primary); text-decoration: underline;">console.firebase.google.com</a> and sign in with Google.</li>
               <li>Click <strong>"Add Project"</strong> and name it <code>bismillah-store</code>.</li>
-              <li>Under Project Settings, add a <strong>Web App (</>)</strong> and copy the <code>firebaseConfig</code> object.</li>
+              <li>Under Project Settings, add a <strong>Web App (&lt;/&gt;)</strong> and copy the <code>firebaseConfig</code> object.</li>
               <li>Go to <strong>Build ➔ Firestore Database</strong>, click <strong>"Create Database"</strong> and choose <strong>"Test Mode"</strong> (read & write access enabled).</li>
               <li>Paste the configuration keys in the form below and click <strong>"Save & Connect"</strong>.</li>
             </ol>
@@ -1722,14 +1755,25 @@ function renderAdminView() {
 
           <form id="firebase-setup-form" style="display: flex; flex-direction: column; gap: 12px; max-width: 650px;">
             <div class="form-group">
-              <label class="form-label">Firebase Config JSON</label>
-              <textarea id="fb-config-json" class="form-textarea" rows="4" placeholder='{"apiKey": "AIza...", "projectId": "bismillah-store", ...}'></textarea>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label class="form-label" style="margin-bottom: 0;">Firebase Config JSON</label>
+                ${getSavedFirebaseConfig() ? `
+                  <button type="button" id="btn-copy-fb-config" class="nav-btn" style="padding: 3px 10px; font-size: 0.75rem;">
+                    📋 Copy Saved Config
+                  </button>
+                ` : ''}
+              </div>
+              <textarea id="fb-config-json" class="form-textarea" rows="4" placeholder='{"apiKey": "AIza...", "projectId": "bismillah-store", ...}'>${getSavedFirebaseConfig() ? JSON.stringify(getSavedFirebaseConfig(), null, 2) : ''}</textarea>
             </div>
 
             <button type="submit" class="btn-checkout" style="width: auto; padding: 12px 20px;">
               🔗 Save & Connect Firebase
             </button>
           </form>
+
+          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-sm); padding: 12px 14px; font-size: 0.82rem; color: #166534; margin-top: 14px; max-width: 650px;">
+            <strong>💡 Auto-Connect Mobile Phones:</strong> To connect ALL mobile phones and tablets automatically without pasting on each device, add this config to <code>src/services/firebaseClientConfig.js</code> in your code repository and push to GitHub.
+          </div>
 
           <hr style="margin: 28px 0; border: none; border-top: 1px solid #e2e8f0;" />
 
@@ -2645,17 +2689,35 @@ function attachAdminEvents() {
     });
   });
 
-  // Firebase Setup Form
+  // Firebase Setup Form (supports JSON, JS object literals, or const firebaseConfig = { ... })
   document.getElementById('firebase-setup-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const jsonStr = document.getElementById('fb-config-json').value.trim();
+    const rawInput = document.getElementById('fb-config-json')?.value || '';
+    const jsonStr = rawInput.trim();
     if (!jsonStr) {
-      showToast("Please paste your Firebase config JSON.", "error");
+      showToast("Please paste your Firebase config.", "error");
       return;
     }
 
     try {
-      const config = JSON.parse(jsonStr);
+      let config = null;
+      let clean = jsonStr.replace(/^(const|let|var)\s+\w+\s*=\s*/i, '').replace(/;\s*$/, '').trim();
+
+      try {
+        config = JSON.parse(clean);
+      } catch (jsonErr) {
+        // Fallback for JS object literal with unquoted keys
+        try {
+          if (clean.startsWith('{') && clean.endsWith('}')) {
+            config = new Function(`"use strict"; return (${clean});`)();
+          }
+        } catch (fnErr) {}
+      }
+
+      if (!config || typeof config !== 'object' || !config.apiKey || !config.projectId) {
+        throw new Error("Missing required 'apiKey' or 'projectId' in config.");
+      }
+
       const res = await initFirebaseWithConfig(config);
       if (res.success) {
         showToast(res.message, "success");
@@ -2664,7 +2726,22 @@ function attachAdminEvents() {
       }
       renderAdminView();
     } catch (err) {
-      showToast("Invalid JSON format! Please check the copied config.", "error");
+      showToast(err.message || "Invalid configuration format! Please check the copied config.", "error");
+    }
+  });
+
+  // Copy Saved Firebase Config
+  document.getElementById('btn-copy-fb-config')?.addEventListener('click', async () => {
+    try {
+      const cfg = getSavedFirebaseConfig();
+      if (!cfg) {
+        showToast("No saved config to copy", "info");
+        return;
+      }
+      await navigator.clipboard.writeText(JSON.stringify(cfg, null, 2));
+      showToast("Firebase config copied! You can paste it into firebaseClientConfig.js or onto your mobile phone.", "success");
+    } catch (e) {
+      showToast("Could not copy to clipboard", "error");
     }
   });
 
@@ -2738,12 +2815,16 @@ function attachAdminEvents() {
 
     try {
       await setFirestoreAdminPassword(newPass);
-      showToast("Admin password updated in Firestore! Works on all devices.", "success");
+      if (isFirebaseConnected()) {
+        showToast("Admin password updated in Firestore! Synced across all connected devices.", "success");
+      } else {
+        showToast("Admin password saved locally. Connect Firebase in Settings to sync across other devices.", "info");
+      }
       if (newPassInput) newPassInput.value = '';
       if (confirmPassInput) confirmPassInput.value = '';
       renderAdminView();
     } catch (err) {
-      showToast(err.message || "Could not update password in Firestore", "error");
+      showToast(err.message || "Could not update password", "error");
     } finally {
       if (submitBtn) {
         submitBtn.disabled = false;
