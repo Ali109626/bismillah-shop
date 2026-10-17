@@ -1,5 +1,6 @@
 // Bismillah General Store - Data, Firebase Firestore & Receipt Billing Service
 import { initialProducts } from '../data/sampleProducts.js';
+import { DEFAULT_FIREBASE_CONFIG } from './firebaseClientConfig.js';
 
 const STORAGE_KEYS = {
   PRODUCTS: 'bismillah_products_v1',
@@ -7,7 +8,6 @@ const STORAGE_KEYS = {
   RECEIPTS: 'bismillah_receipts_v1',
   RECEIPT_COUNTER: 'bismillah_receipt_counter_v1',
   FIREBASE_CONFIG: 'bismillah_firebase_config_v1',
-  ADMIN_PASSWORD: 'bismillah_admin_pass_v1',
   CART: 'bismillah_customer_cart_v1'
 };
 
@@ -22,6 +22,9 @@ let isFirestoreActive = false;
 let productsListeners = [];
 let ordersListeners = [];
 let receiptsListeners = [];
+let adminPasswordListeners = [];
+let cachedAdminPassword = null;
+let isFirebaseAutoIniting = false;
 
 // Dynamic Firebase module loader
 async function getFirestoreModule() {
@@ -162,9 +165,8 @@ export function initLocalStorage() {
     localStorage.setItem(STORAGE_KEYS.RECEIPTS, JSON.stringify(demoReceipts));
   }
 
-  if (!localStorage.getItem(STORAGE_KEYS.ADMIN_PASSWORD)) {
-    localStorage.setItem(STORAGE_KEYS.ADMIN_PASSWORD, DEFAULT_ADMIN_PASSWORD);
-  }
+  // Clean up any legacy admin password stored in localStorage
+  localStorage.removeItem('bismillah_admin_pass_v1');
 }
 
 // Shared Receipt Counter: Atomically fetch and increment the next number
@@ -574,17 +576,91 @@ export function getDailySalesStats() {
   };
 }
 
-// Admin Authentication Helpers
-export function getAdminPassword() {
-  return localStorage.getItem(STORAGE_KEYS.ADMIN_PASSWORD) || DEFAULT_ADMIN_PASSWORD;
+// Admin Authentication Helpers (Live Firestore settings/admin)
+export function subscribeAdminPassword(callback) {
+  if (typeof callback === 'function') {
+    adminPasswordListeners.push(callback);
+    if (cachedAdminPassword) {
+      callback(cachedAdminPassword);
+    }
+  }
 }
 
-export function setAdminPassword(newPassword) {
+function notifyAdminPasswordChanged(newPassword) {
+  cachedAdminPassword = newPassword;
+  adminPasswordListeners.forEach(cb => {
+    try { cb(newPassword); } catch (e) { console.error(e); }
+  });
+}
+
+// Fetch admin password from Firestore settings/admin doc
+export async function getFirestoreAdminPassword() {
+  if (isFirestoreActive && firestoreDb) {
+    try {
+      const { doc, getDoc, setDoc } = await getFirestoreModule();
+      const adminDocRef = doc(firestoreDb, 'settings', 'admin');
+      const snap = await getDoc(adminDocRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        const pass = data?.adminPassword;
+        if (pass) {
+          cachedAdminPassword = pass;
+          return pass;
+        }
+      }
+      // If settings/admin does not exist yet, create it with default password
+      const defaultData = {
+        adminPassword: DEFAULT_ADMIN_PASSWORD,
+        updatedAt: new Date().toISOString(),
+        note: 'Bismillah Store Manager Password'
+      };
+      await setDoc(adminDocRef, defaultData);
+      cachedAdminPassword = DEFAULT_ADMIN_PASSWORD;
+      return DEFAULT_ADMIN_PASSWORD;
+    } catch (err) {
+      console.warn("Could not read admin password from Firestore:", err);
+    }
+  }
+
+  // Fallback in-memory cache or default
+  return cachedAdminPassword || DEFAULT_ADMIN_PASSWORD;
+}
+
+// Update admin password in Firestore settings/admin doc across all devices
+export async function setFirestoreAdminPassword(newPassword) {
   if (!newPassword || newPassword.trim().length < 4) {
     throw new Error("Password must be at least 4 characters long.");
   }
-  localStorage.setItem(STORAGE_KEYS.ADMIN_PASSWORD, newPassword.trim());
+  const cleanPassword = newPassword.trim();
+
+  if (isFirestoreActive && firestoreDb) {
+    const { doc, setDoc } = await getFirestoreModule();
+    const adminDocRef = doc(firestoreDb, 'settings', 'admin');
+    await setDoc(adminDocRef, {
+      adminPassword: cleanPassword,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  }
+
+  notifyAdminPasswordChanged(cleanPassword);
   return true;
+}
+
+// Verify entered password against Firestore settings/admin
+export async function verifyAdminPassword(enteredPassword) {
+  if (!enteredPassword) return false;
+  // Always fetch fresh from Firestore
+  const current = await getFirestoreAdminPassword();
+  return enteredPassword.trim() === current.trim();
+}
+
+// Backward-compatible synchronous helpers
+export function getAdminPassword() {
+  return cachedAdminPassword || DEFAULT_ADMIN_PASSWORD;
+}
+
+export function setAdminPassword(newPassword) {
+  return setFirestoreAdminPassword(newPassword);
 }
 
 // Firebase Configuration Helpers
@@ -601,6 +677,10 @@ export function isFirebaseConnected() {
   return isFirestoreActive;
 }
 
+export function getActiveFirestoreDb() {
+  return firestoreDb;
+}
+
 // Initialize Firebase dynamically
 export async function initFirebaseWithConfig(config) {
   if (!config || !config.apiKey || !config.projectId) {
@@ -610,7 +690,7 @@ export async function initFirebaseWithConfig(config) {
 
   try {
     const { initializeApp, getApps, getApp } = await getFirebaseAppModule();
-    const { getFirestore, collection, onSnapshot } = await getFirestoreModule();
+    const { getFirestore, collection, doc, onSnapshot, getDoc, setDoc } = await getFirestoreModule();
 
     const app = getApps().length === 0 ? initializeApp(config) : getApp();
     const db = getFirestore(app);
@@ -620,6 +700,37 @@ export async function initFirebaseWithConfig(config) {
     isFirestoreActive = true;
 
     localStorage.setItem(STORAGE_KEYS.FIREBASE_CONFIG, JSON.stringify(config));
+
+    // Real-time admin settings listener (settings/admin -> adminPassword)
+    const adminDocRef = doc(db, 'settings', 'admin');
+    getDoc(adminDocRef).then((snap) => {
+      if (!snap.exists()) {
+        const defaultData = {
+          adminPassword: DEFAULT_ADMIN_PASSWORD,
+          updatedAt: new Date().toISOString(),
+          note: 'Store manager password'
+        };
+        setDoc(adminDocRef, defaultData).then(() => {
+          notifyAdminPasswordChanged(DEFAULT_ADMIN_PASSWORD);
+        }).catch(err => console.warn("Failed creating settings/admin doc:", err));
+      } else {
+        const p = snap.data()?.adminPassword;
+        if (p) notifyAdminPasswordChanged(p);
+      }
+    }).catch(err => {
+      console.warn("Failed checking settings/admin doc:", err);
+    });
+
+    onSnapshot(adminDocRef, (snap) => {
+      if (snap.exists()) {
+        const p = snap.data()?.adminPassword;
+        if (p) {
+          notifyAdminPasswordChanged(p);
+        }
+      }
+    }, (err) => {
+      console.warn("Firestore admin settings snapshot error:", err);
+    });
 
     // Real-time products listener
     const prodsCol = collection(db, 'products');
@@ -676,5 +787,29 @@ export async function initFirebaseWithConfig(config) {
   }
 }
 
-// Auto-init local store
+// Auto-initialize Firebase from code config or saved local storage
+export async function initFirebaseAuto() {
+  if (isFirebaseAutoIniting) return;
+  isFirebaseAutoIniting = true;
+  try {
+    let cfg = null;
+    if (DEFAULT_FIREBASE_CONFIG && DEFAULT_FIREBASE_CONFIG.apiKey && DEFAULT_FIREBASE_CONFIG.projectId) {
+      cfg = DEFAULT_FIREBASE_CONFIG;
+    } else {
+      cfg = getSavedFirebaseConfig();
+    }
+    if (cfg && cfg.apiKey && cfg.projectId) {
+      return await initFirebaseWithConfig(cfg);
+    }
+  } catch (e) {
+    console.warn("Auto-init Firebase skipped:", e);
+  } finally {
+    isFirebaseAutoIniting = false;
+  }
+  return { success: false, message: "No active Firebase configuration found." };
+}
+
+// Auto-init local store & attempt Firebase connection
 initLocalStorage();
+initFirebaseAuto().catch(() => {});
+

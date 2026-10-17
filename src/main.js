@@ -18,6 +18,10 @@ import {
   getLocalReceipts,
   getAdminPassword,
   setAdminPassword,
+  getFirestoreAdminPassword,
+  setFirestoreAdminPassword,
+  verifyAdminPassword,
+  subscribeAdminPassword,
   getSavedFirebaseConfig,
   initFirebaseWithConfig,
   isFirebaseConnected
@@ -706,8 +710,9 @@ function renderApp() {
           <p style="font-size: 0.85rem; color: var(--text-secondary);">
             Enter store manager password to access POS billing, receipts, daily reports, and product catalog.
           </p>
-          <div style="background: #f1f5f9; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 0.78rem; color: #475569;">
-            Default password: <strong>admin123</strong> (can be changed in settings)
+          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 0.78rem; color: #166534; display: flex; align-items: center; gap: 6px;">
+            <span>☁️</span>
+            <span>Firestore live verified across all devices. Default: <strong>admin123</strong></span>
           </div>
           <form id="admin-login-form">
             <div class="form-group">
@@ -715,7 +720,7 @@ function renderApp() {
               <input type="password" id="admin-pass-input" class="form-input" placeholder="Enter password" required />
             </div>
             <div id="login-error-msg" style="color: var(--danger); font-size: 0.82rem; display: none;"></div>
-            <button type="submit" class="btn-add-cart" style="padding: 12px; font-size: 0.95rem; margin-top: 8px;">
+            <button type="submit" id="btn-unlock-admin" class="btn-add-cart" style="padding: 12px; font-size: 0.95rem; margin-top: 8px;">
               Unlock Admin Panel
             </button>
           </form>
@@ -1358,28 +1363,53 @@ function openAdminLoginModal() {
   if (input) input.value = '';
   modal?.classList.add('active');
   input?.focus();
+  // Pre-fetch password from Firestore in the background
+  getFirestoreAdminPassword().catch(() => {});
 }
 
 function closeAdminLoginModal() {
   document.getElementById('admin-login-modal')?.classList.remove('active');
 }
 
-function handleAdminLogin(e) {
+async function handleAdminLogin(e) {
   e.preventDefault();
-  const input = document.getElementById('admin-pass-input').value;
-  const currentPassword = getAdminPassword();
+  const inputEl = document.getElementById('admin-pass-input');
+  const btn = document.getElementById('btn-unlock-admin');
+  const errorMsg = document.getElementById('login-error-msg');
+  if (!inputEl) return;
 
-  if (input === currentPassword) {
-    state.adminLoggedIn = true;
-    state.view = 'admin';
-    closeAdminLoginModal();
-    renderApp();
-    showToast("Welcome to Admin & POS Dashboard!", "success");
-  } else {
-    const errorMsg = document.getElementById('login-error-msg');
+  const input = inputEl.value;
+  if (errorMsg) errorMsg.style.display = 'none';
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Verifying with Firestore...';
+  }
+
+  try {
+    const isValid = await verifyAdminPassword(input);
+    if (isValid) {
+      state.adminLoggedIn = true;
+      state.view = 'admin';
+      closeAdminLoginModal();
+      renderApp();
+      showToast("Welcome to Admin & POS Dashboard!", "success");
+    } else {
+      if (errorMsg) {
+        errorMsg.textContent = "Incorrect password. Please enter the current admin password.";
+        errorMsg.style.display = 'block';
+      }
+      inputEl.focus();
+    }
+  } catch (err) {
     if (errorMsg) {
-      errorMsg.textContent = "Incorrect password. Default is 'admin123'.";
+      errorMsg.textContent = "Error checking password: " + (err.message || "Network issue");
       errorMsg.style.display = 'block';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Unlock Admin Panel';
     }
   }
 }
@@ -1713,14 +1743,51 @@ function renderAdminView() {
 
           <hr style="margin: 28px 0; border: none; border-top: 1px solid #e2e8f0;" />
 
-          <h3 style="margin-bottom: 12px;">🔑 Change Admin Password</h3>
-          <form id="change-pass-form" style="max-width: 400px; display: flex; flex-direction: column; gap: 12px;">
+          <h3 style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+            <span>🔐</span> Store Manager & Admin Password
+          </h3>
+          <p style="font-size: 0.86rem; color: var(--text-secondary); margin-bottom: 16px;">
+            Stored in Firestore document <code>settings/admin</code> (field: <code>adminPassword</code>). Changing the password here immediately updates all devices (laptops, phones, tablets).
+          </p>
+
+          <!-- Current Password Card -->
+          <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: var(--radius-md); padding: 16px; margin-bottom: 20px; box-shadow: var(--shadow-sm); max-width: 520px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">
+                Current Active Password
+              </span>
+              <span style="background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; font-size: 0.72rem; padding: 2px 8px; border-radius: 999px; font-weight: 700;">
+                ☁️ Firestore Live
+              </span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <span id="current-pass-display" data-revealed="false" style="font-family: monospace; font-size: 1.25rem; font-weight: 800; color: #0f172a; letter-spacing: 2px;">
+                ••••••••
+              </span>
+              <button type="button" id="btn-toggle-show-pass" class="nav-btn" style="padding: 6px 12px; font-size: 0.78rem;">
+                👁️ Show Password
+              </button>
+              <button type="button" id="btn-copy-pass" class="nav-btn" style="padding: 6px 12px; font-size: 0.78rem;">
+                📋 Copy
+              </button>
+            </div>
+            <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 8px;">
+              Firestore Path: <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #475569;">settings/admin</code>
+            </div>
+          </div>
+
+          <!-- Change Password Form -->
+          <form id="change-pass-form" style="max-width: 450px; display: flex; flex-direction: column; gap: 12px;">
             <div class="form-group">
               <label class="form-label" for="new-pass-input">New Admin Password</label>
-              <input type="password" id="new-pass-input" class="form-input" minlength="4" placeholder="Enter new password" required />
+              <input type="password" id="new-pass-input" class="form-input" minlength="4" placeholder="Enter new password (min 4 characters)" required />
             </div>
-            <button type="submit" class="nav-btn nav-btn-admin" style="padding: 10px;">
-              Update Password
+            <div class="form-group">
+              <label class="form-label" for="confirm-pass-input">Confirm New Password</label>
+              <input type="password" id="confirm-pass-input" class="form-input" minlength="4" placeholder="Re-enter new password" required />
+            </div>
+            <button type="submit" id="btn-submit-change-pass" class="nav-btn nav-btn-admin" style="padding: 11px 18px; font-weight: 700; width: auto; align-self: flex-start;">
+              💾 Update Password on All Devices
             </button>
           </form>
         </div>
@@ -2610,16 +2677,78 @@ function attachAdminEvents() {
     }
   });
 
-  // Change Admin Password Form
-  document.getElementById('change-pass-form')?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const newPass = document.getElementById('new-pass-input').value.trim();
+  // Current Password Reveal & Copy buttons
+  let passRevealed = false;
+  document.getElementById('btn-toggle-show-pass')?.addEventListener('click', async () => {
+    const display = document.getElementById('current-pass-display');
+    const btn = document.getElementById('btn-toggle-show-pass');
+    passRevealed = !passRevealed;
+    if (passRevealed) {
+      if (display) {
+        display.textContent = "Loading...";
+        display.dataset.revealed = 'true';
+      }
+      const pass = await getFirestoreAdminPassword();
+      if (display) display.textContent = pass;
+      if (btn) btn.textContent = '🙈 Hide Password';
+    } else {
+      if (display) {
+        display.textContent = '••••••••';
+        display.dataset.revealed = 'false';
+      }
+      if (btn) btn.textContent = '👁️ Show Password';
+    }
+  });
+
+  document.getElementById('btn-copy-pass')?.addEventListener('click', async () => {
     try {
-      setAdminPassword(newPass);
-      showToast("Admin password changed successfully!", "success");
-      document.getElementById('new-pass-input').value = '';
+      const pass = await getFirestoreAdminPassword();
+      await navigator.clipboard.writeText(pass);
+      showToast("Admin password copied to clipboard!", "success");
+    } catch (e) {
+      const pass = await getFirestoreAdminPassword();
+      showToast(`Current password: ${pass}`, "info");
+    }
+  });
+
+  // Change Admin Password Form (Live Firestore sync across devices)
+  document.getElementById('change-pass-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const newPassInput = document.getElementById('new-pass-input');
+    const confirmPassInput = document.getElementById('confirm-pass-input');
+    const submitBtn = document.getElementById('btn-submit-change-pass');
+
+    const newPass = (newPassInput?.value || '').trim();
+    const confirmPass = (confirmPassInput?.value || '').trim();
+
+    if (newPass.length < 4) {
+      showToast("Password must be at least 4 characters long.", "error");
+      return;
+    }
+
+    if (confirmPass && newPass !== confirmPass) {
+      showToast("Passwords do not match! Please check and retry.", "error");
+      return;
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Saving to Firestore...";
+    }
+
+    try {
+      await setFirestoreAdminPassword(newPass);
+      showToast("Admin password updated in Firestore! Works on all devices.", "success");
+      if (newPassInput) newPassInput.value = '';
+      if (confirmPassInput) confirmPassInput.value = '';
+      renderAdminView();
     } catch (err) {
-      showToast(err.message, "error");
+      showToast(err.message || "Could not update password in Firestore", "error");
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "💾 Update Password on All Devices";
+      }
     }
   });
 }
@@ -3178,6 +3307,16 @@ function init() {
   subscribeReceipts((receipts) => {
     state.receipts = receipts;
     if (state.view === 'admin') renderAdminView();
+  });
+
+  // Subscribe to real-time admin password updates across all devices
+  subscribeAdminPassword((newPass) => {
+    if (state.view === 'admin' && state.adminSubTab === 'settings') {
+      const display = document.getElementById('current-pass-display');
+      if (display && display.dataset.revealed === 'true') {
+        display.textContent = newPass;
+      }
+    }
   });
 
   // Initial render
