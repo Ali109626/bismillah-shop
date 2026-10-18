@@ -1363,6 +1363,8 @@ img {
 
 .form-input, .form-select, .form-textarea {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 10px 14px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-medium);
@@ -1764,6 +1766,10 @@ img {
   display: none;
   background: #f8fafc;
   min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .admin-view-container.active {
@@ -1781,6 +1787,9 @@ img {
   position: sticky;
   top: 0;
   z-index: 100;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .admin-title-badge {
@@ -1789,6 +1798,7 @@ img {
   gap: 8px;
   font-weight: 800;
   font-size: 1.05rem;
+  min-width: 0;
 }
 
 .admin-title-badge .tag {
@@ -1799,12 +1809,14 @@ img {
   padding: 2px 6px;
   border-radius: var(--radius-sm);
   text-transform: uppercase;
+  flex-shrink: 0;
 }
 
 .admin-actions-bar {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .btn-admin-action {
@@ -1818,6 +1830,8 @@ img {
   align-items: center;
   gap: 5px;
   transition: var(--transition);
+  box-sizing: border-box;
+  white-space: nowrap;
 }
 
 .btn-admin-action:hover {
@@ -1832,28 +1846,49 @@ img {
   background: #dc2626;
 }
 
-/* Admin Tabs */
+/* Admin Tabs - Horizontally scrollable so no tab text is cut off */
 .admin-tabs-bar {
   background: #ffffff;
   border-bottom: 1px solid var(--border-light);
   display: flex;
+  flex-wrap: nowrap;
   gap: 4px;
   overflow-x: auto;
-  padding: 8px 16px 0;
-  scrollbar-width: none;
+  overflow-y: hidden;
+  padding: 8px 12px 0;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.admin-tabs-bar::-webkit-scrollbar {
+  height: 3px;
+}
+
+.admin-tabs-bar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.admin-tabs-bar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 99px;
 }
 
 .admin-tab-btn {
-  padding: 10px 16px;
-  font-size: 0.88rem;
+  padding: 10px 14px;
+  font-size: 0.86rem;
   font-weight: 700;
   color: var(--text-secondary);
   border-bottom: 3px solid transparent;
   white-space: nowrap;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
   transition: var(--transition);
+  box-sizing: border-box;
 }
 
 .admin-tab-btn:hover {
@@ -1865,6 +1900,29 @@ img {
   border-bottom-color: var(--primary);
   background: var(--primary-subtle);
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+/* Admin Container & Alert Box */
+.admin-container {
+  padding: 20px 16px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.admin-connection-alert {
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* Admin Metric Cards */
@@ -2494,6 +2552,10 @@ img {
   grid-template-columns: 1fr;
   gap: 18px;
   margin-bottom: 24px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 @media (min-width: 900px) {
@@ -2511,6 +2573,11 @@ img {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 /* POS Quick Product Tap (Big Touch-Friendly Emoji Buttons) */
@@ -2521,6 +2588,9 @@ img {
   max-height: 520px;
   overflow-y: auto;
   padding-right: 4px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .pos-product-item {
@@ -2538,6 +2608,7 @@ img {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
   min-height: 165px;
   position: relative;
+  box-sizing: border-box;
 }
 
 .pos-product-item:hover {
@@ -2580,6 +2651,7 @@ img {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  word-break: break-word;
 }
 
 .pos-product-urdu {
@@ -2618,6 +2690,10 @@ img {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .pos-ticket-header {
@@ -2627,6 +2703,7 @@ img {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  box-sizing: border-box;
 }
 
 .pos-ticket-header h3 {
@@ -2637,6 +2714,44 @@ img {
   gap: 6px;
 }
 
+/* POS Customer Details */
+.pos-customer-grid {
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border-light);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.pos-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.pos-field-label {
+  font-size: 0.72rem;
+  color: #64748b;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pos-w-full {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
 .pos-ticket-body {
   padding: 16px;
   display: flex;
@@ -2644,6 +2759,9 @@ img {
   gap: 12px;
   max-height: 380px;
   overflow-y: auto;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .pos-ticket-item {
@@ -2654,12 +2772,17 @@ img {
   background: var(--bg-alt);
   border-radius: var(--radius-md);
   gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .pos-item-title {
   font-size: 0.84rem;
   font-weight: 700;
   flex-grow: 1;
+  min-width: 0;
+  word-break: break-word;
 }
 
 .pos-item-stepper {
@@ -2668,6 +2791,7 @@ img {
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-sm);
   background: #ffffff;
+  flex-shrink: 0;
 }
 
 .pos-item-stepper button {
@@ -2686,8 +2810,9 @@ img {
   font-size: 0.9rem;
   font-weight: 800;
   color: var(--primary-darker);
-  min-width: 65px;
+  min-width: 60px;
   text-align: right;
+  flex-shrink: 0;
 }
 
 .pos-ticket-footer {
@@ -2697,6 +2822,9 @@ img {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .pos-calc-row {
@@ -2705,6 +2833,9 @@ img {
   align-items: center;
   font-size: 0.88rem;
   color: var(--text-secondary);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .pos-total-row {
@@ -2716,6 +2847,32 @@ img {
   color: var(--primary-darker);
   padding-top: 8px;
   border-top: 2px dashed var(--border-medium);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* POS Cash Tendered Box */
+.pos-cash-grid {
+  background: #ffffff;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid #e2e8f0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.pos-change-display {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #047857;
+  margin-top: 4px;
+  word-break: break-all;
 }
 
 .pos-buttons-grid {
@@ -2723,6 +2880,188 @@ img {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-top: 6px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.pos-btn-print {
+  background: #047857 !important;
+  font-size: 0.88rem !important;
+  padding: 12px 10px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  white-space: nowrap;
+}
+
+.pos-btn-receipt {
+  background: #0284c7 !important;
+  font-size: 0.88rem !important;
+  padding: 12px 10px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  white-space: nowrap;
+}
+
+/* Empty ticket state */
+.pos-empty-ticket {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* Mobile Responsive Optimizations for Admin & POS Billing (<= 640px) */
+@media (max-width: 640px) {
+  .admin-top-nav {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .admin-title-badge {
+    font-size: 0.92rem;
+  }
+
+  .admin-actions-bar {
+    gap: 6px;
+  }
+
+  .btn-admin-action {
+    padding: 5px 8px;
+    font-size: 0.74rem;
+  }
+
+  .admin-container {
+    padding: 12px 8px;
+  }
+
+  .pos-catalog-card {
+    padding: 12px 10px;
+    border-radius: var(--radius-md);
+  }
+
+  .pos-ticket-card {
+    border-radius: var(--radius-md);
+  }
+
+  .pos-ticket-header {
+    padding: 12px 14px;
+  }
+
+  .pos-ticket-header h3 {
+    font-size: 0.95rem;
+  }
+
+  .pos-ticket-body {
+    padding: 12px 10px;
+  }
+
+  .pos-ticket-footer {
+    padding: 12px 10px;
+  }
+
+  /* PROBLEM 2: Product cards carousel showing exactly 2 FULL cards at rest */
+  .pos-items-grid {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    scroll-snap-type: x mandatory !important;
+    -webkit-overflow-scrolling: touch !important;
+    gap: 10px !important;
+    padding: 4px 2px 10px 2px !important;
+    max-height: none !important;
+    scrollbar-width: thin;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .pos-items-grid::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .pos-items-grid::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 99px;
+  }
+
+  /* Size cards so exactly 2 FULL cards fit in viewport, with equal gap and padding */
+  .pos-product-item {
+    flex: 0 0 calc((100% - 10px) / 2) !important;
+    width: calc((100% - 10px) / 2) !important;
+    min-width: calc((100% - 10px) / 2) !important;
+    max-width: calc((100% - 10px) / 2) !important;
+    box-sizing: border-box !important;
+    scroll-snap-align: start !important;
+    scroll-snap-stop: normal !important;
+    padding: 10px 6px 8px 6px !important;
+    min-height: 158px !important;
+  }
+
+  .pos-emoji-badge {
+    width: 50px !important;
+    height: 50px !important;
+    font-size: 26px !important;
+    margin-bottom: 2px !important;
+  }
+
+  .pos-product-name {
+    font-size: 0.78rem !important;
+  }
+
+  .pos-product-urdu {
+    font-size: 0.7rem !important;
+    margin-bottom: 2px !important;
+  }
+
+  .pos-product-price {
+    font-size: 0.85rem !important;
+    padding: 2px 8px !important;
+  }
+
+  .pos-product-stock {
+    font-size: 0.65rem !important;
+  }
+}
+
+/* Small mobile width <= 480px (including 360px) */
+@media (max-width: 480px) {
+  /* Customer details and Cash Tendered stack in 1 column so they never extend past right edge */
+  .pos-customer-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .pos-cash-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  /* Action buttons stack in 1 column with full width */
+  .pos-buttons-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .pos-btn-print,
+  .pos-btn-receipt {
+    padding: 12px 14px !important;
+    white-space: normal !important;
+  }
+
+  .metrics-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
 }
 
 /* ==========================================================================

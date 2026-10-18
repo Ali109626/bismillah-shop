@@ -1507,17 +1507,17 @@ function renderAdminView() {
     </div>
 
     <!-- Admin Tab Content -->
-    <div class="container" style="padding: 20px 16px;">
+    <div class="container admin-container">
 
       <!-- Live Connection Alert -->
-      <div style="background: ${isConnected ? '#ecfdf5' : '#eff6ff'}; border: 1px solid ${isConnected ? '#a7f3d0' : '#bfdbfe'}; padding: 10px 16px; border-radius: var(--radius-md); font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <div class="admin-connection-alert" style="background: ${isConnected ? '#ecfdf5' : '#eff6ff'}; border: 1px solid ${isConnected ? '#a7f3d0' : '#bfdbfe'};">
         <div>
           <strong>Database Status:</strong> 
           ${isConnected 
             ? '🟢 Connected to Google Firebase Firestore (Multi-device real-time sync)' 
             : '🔵 Local Storage Active (100% operational; cloud sync ready)'}
         </div>
-        <button class="nav-btn nav-btn-admin" style="padding: 4px 10px; font-size: 0.75rem;" id="btn-quick-config-fb">
+        <button class="nav-btn nav-btn-admin" style="padding: 4px 10px; font-size: 0.75rem; white-space: nowrap; flex-shrink: 0;" id="btn-quick-config-fb">
           Configure Cloud
         </button>
       </div>
@@ -1926,14 +1926,14 @@ function renderPosBillingInterface() {
         </div>
 
         <!-- Customer details (Optional) -->
-        <div style="padding: 12px 16px; background: #f8fafc; border-bottom: 1px solid var(--border-light); display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-          <div>
-            <label style="font-size: 0.72rem; color: #64748b; font-weight: 600;">Customer Name</label>
-            <input type="text" id="pos-cust-name" class="form-input" style="padding: 6px 8px; font-size: 0.85rem;" value="${state.posCustomer.name}" />
+        <div class="pos-customer-grid">
+          <div class="pos-field-group">
+            <label class="pos-field-label">Customer Name</label>
+            <input type="text" id="pos-cust-name" class="form-input pos-w-full" style="padding: 6px 8px; font-size: 0.85rem;" value="${state.posCustomer.name}" />
           </div>
-          <div>
-            <label style="font-size: 0.72rem; color: #64748b; font-weight: 600;">Phone (Optional)</label>
-            <input type="text" id="pos-cust-phone" class="form-input" style="padding: 6px 8px; font-size: 0.85rem;" placeholder="03xx-xxxxxxx" value="${state.posCustomer.phone}" />
+          <div class="pos-field-group">
+            <label class="pos-field-label">Phone (Optional)</label>
+            <input type="text" id="pos-cust-phone" class="form-input pos-w-full" style="padding: 6px 8px; font-size: 0.85rem;" placeholder="03xx-xxxxxxx" value="${state.posCustomer.phone}" />
           </div>
         </div>
 
@@ -1950,11 +1950,11 @@ function renderPosBillingInterface() {
           </div>
 
           <div class="pos-calc-row">
-            <label style="display: flex; align-items: center; gap: 6px;">
+            <label style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
               <span>Special Discount (Rs):</span>
-              <input type="number" id="pos-discount-input" class="form-input" style="width: 80px; padding: 4px 6px; font-size: 0.85rem;" value="${state.posCustomer.discount || 0}" min="0" />
+              <input type="number" id="pos-discount-input" class="form-input" style="width: 80px; max-width: 100%; padding: 4px 6px; font-size: 0.85rem;" value="${state.posCustomer.discount || 0}" min="0" />
             </label>
-            <span id="pos-discount-display" style="color: #b91c1c;">− Rs. 0</span>
+            <span id="pos-discount-display" style="color: #b91c1c; font-weight: 700;">− Rs. 0</span>
           </div>
 
           <div class="pos-total-row">
@@ -1963,23 +1963,23 @@ function renderPosBillingInterface() {
           </div>
 
           <!-- Cash tender & Change returned -->
-          <div style="background: #ffffff; padding: 10px; border-radius: var(--radius-md); border: 1px solid #e2e8f0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px;">
-            <div>
-              <label style="font-size: 0.72rem; color: #64748b; font-weight: 600;">Cash Tendered (وصول رقم)</label>
-              <input type="number" id="pos-cash-input" class="form-input" placeholder="e.g. 2000" style="padding: 6px 8px; font-weight: 700;" value="${state.posCustomer.cashReceived}" />
+          <div class="pos-cash-grid">
+            <div class="pos-field-group">
+              <label class="pos-field-label">Cash Tendered (وصول رقم)</label>
+              <input type="number" id="pos-cash-input" class="form-input pos-w-full" placeholder="e.g. 2000" style="padding: 6px 8px; font-weight: 700;" value="${state.posCustomer.cashReceived}" />
             </div>
-            <div>
-              <label style="font-size: 0.72rem; color: #64748b; font-weight: 600;">Change / Return (بقایا)</label>
-              <div id="pos-change-val" style="font-size: 1.15rem; font-weight: 800; color: #047857; margin-top: 4px;">Rs. 0</div>
+            <div class="pos-field-group">
+              <label class="pos-field-label">Change / Return (بقایا)</label>
+              <div id="pos-change-val" class="pos-change-display">Rs. 0</div>
             </div>
           </div>
 
           <!-- POS Action Buttons -->
           <div class="pos-buttons-grid">
-            <button class="btn-checkout" id="btn-pos-print-sale" style="background: #047857; font-size: 0.9rem; padding: 12px 10px;">
+            <button class="btn-checkout pos-btn-print" id="btn-pos-print-sale">
               <span>🖨️ Print & Save Bill</span>
             </button>
-            <button class="btn-checkout" id="btn-pos-generate-receipt" style="background: #0284c7; font-size: 0.9rem; padding: 12px 10px;">
+            <button class="btn-checkout pos-btn-receipt" id="btn-pos-generate-receipt">
               <span>🧾 Generate Receipt</span>
             </button>
           </div>
@@ -2002,10 +2002,10 @@ function renderPosTicket() {
 
   if (entries.length === 0) {
     container.innerHTML = `
-      <div style="padding: 30px; text-align: center; color: var(--text-muted);">
+      <div class="pos-empty-ticket">
         <div style="font-size: 2rem; margin-bottom: 6px;">🛒</div>
-        <div>No items added to current ticket.</div>
-        <div style="font-size: 0.75rem;">Tap any product on the left catalog to add.</div>
+        <div style="font-weight: 700; color: #475569; font-size: 0.9rem;">No items added to current ticket.</div>
+        <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">Tap any product card to add to this bill.</div>
       </div>
     `;
   } else {
@@ -2408,6 +2408,8 @@ function attachAdminEvents() {
     btn.addEventListener('click', () => {
       state.adminTab = btn.dataset.tab;
       renderAdminView();
+      const activeBtn = document.querySelector(`.admin-tab-btn[data-tab="${state.adminTab}"]`);
+      activeBtn?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
     });
   });
 
