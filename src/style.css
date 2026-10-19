@@ -2224,6 +2224,159 @@ img {
   animation: rowFlashHighlight 3s ease-out forwards !important;
 }
 
+/* ==========================================================================
+   ADMIN SEARCH BARS & PRE-CHECK STYLES
+   ========================================================================== */
+.check-before-add-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-bottom: 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.check-input-wrapper {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.check-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding-left: 36px;
+  padding-right: 34px;
+  height: 40px;
+  font-size: 0.85rem;
+}
+
+.check-results-scrollable {
+  max-height: 220px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.check-result-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.check-result-card:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.btn-check-jump-edit {
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.18s ease;
+}
+
+.btn-check-jump-edit:hover {
+  background: #047857;
+  color: #ffffff;
+  border-color: #047857;
+}
+
+.btn-check-add-new {
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: #047857;
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: all 0.18s ease;
+}
+
+.btn-check-add-new:hover {
+  background: #065f46;
+  transform: translateY(-1px);
+}
+
+.stock-search-count-badge {
+  background: #f1f5f9;
+  color: #334155;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid #cbd5e1;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.search-clear-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: #475569;
+  border: none;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.search-clear-btn:hover {
+  background: #cbd5e1;
+  color: #0f172a;
+}
+
+@media (max-width: 480px) {
+  .check-before-add-box {
+    padding: 10px;
+  }
+  .check-result-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .check-result-card > div:last-child {
+    display: flex;
+    justify-content: flex-end;
+  }
+  .check-feedback-line {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .stock-search-count-badge {
+    font-size: 0.72rem;
+  }
+}
+
 /* Bottom Bar for Mobile Quick Access */
 .mobile-sticky-bar {
   position: fixed;

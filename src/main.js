@@ -76,6 +76,7 @@ const state = {
   reportTypeFilter: 'all', // 'all' | 'online' | 'pos'
   activeCategory: 'All',
   searchQuery: '',
+  stockSearchQuery: '',
   onlyInStock: false,
   view: 'store', // 'store' | 'admin'
   adminLoggedIn: false,
@@ -103,6 +104,40 @@ function formatPKR(amount) {
 function normalizeProductName(name) {
   if (!name || typeof name !== 'string') return '';
   return name.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+// Basic HTML escaping helper for safe template literal output
+function escapeHtml(str) {
+  if (!str && str !== 0) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// Case-insensitive and space-insensitive search matching for English and Urdu product names
+function productMatchesSearch(prod, query) {
+  if (!query) return true;
+  const q = normalizeProductName(query);
+  if (!q) return true;
+
+  const engName = normalizeProductName(prod.name || '');
+  const urduName = (prod.urduName || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+  if (engName.includes(q)) return true;
+  if (urduName && urduName.includes(q)) return true;
+
+  const tokens = q.split(' ').filter(Boolean);
+  if (tokens.length > 1) {
+    const allTokensMatch = tokens.every(token => 
+      engName.includes(token) || (urduName && urduName.includes(token))
+    );
+    if (allTokensMatch) return true;
+  }
+
+  return false;
 }
 
 // Toast notification helper
@@ -771,6 +806,49 @@ function renderApp() {
           <button id="btn-close-product-modal" class="close-btn">✕</button>
         </div>
         <div class="modal-body">
+          <!-- "Check before adding" search at the top of the Add Product section -->
+          <div id="check-before-add-section" class="check-before-add-box">
+            <div class="check-box-header" style="margin-bottom: 8px;">
+              <label for="check-prod-search-input" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0; font-weight: 700; font-size: 0.84rem; color: #0f172a;">
+                <span style="display: flex; align-items: center; gap: 6px;">
+                  <span>🔍</span>
+                  <span>Check before adding</span>
+                </span>
+                <span style="font-size: 0.72rem; font-weight: 500; color: #64748b;">(Avoid duplicate items)</span>
+              </label>
+            </div>
+
+            <div class="check-input-wrapper">
+              <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; opacity: 0.6; font-size: 0.9rem;">🔍</span>
+              <input 
+                type="text" 
+                id="check-prod-search-input" 
+                class="form-input check-search-input" 
+                placeholder="Type product name to check if already added..." 
+                autocomplete="off" 
+              />
+              <button 
+                type="button" 
+                id="btn-check-search-clear" 
+                class="search-clear-btn" 
+                style="display: none; position: absolute; right: 10px; top: 50%; transform: translateY(-50%);" 
+                title="Clear search"
+              >✕</button>
+            </div>
+
+            <!-- Dynamic Feedback & Matching Results Area -->
+            <div id="check-prod-results-area" style="display: none; margin-top: 10px;">
+              <div id="check-prod-feedback-banner"></div>
+              <div id="check-prod-results-container" class="check-results-scrollable"></div>
+            </div>
+          </div>
+
+          <div id="check-modal-divider" class="check-modal-divider" style="display: flex; align-items: center; text-align: center; margin: 14px 0 16px; color: #94a3b8; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+            <span style="flex: 1; border-bottom: 1px solid #e2e8f0;"></span>
+            <span style="padding: 0 10px;">Product Details Form</span>
+            <span style="flex: 1; border-bottom: 1px solid #e2e8f0;"></span>
+          </div>
+
           <form id="product-form">
             <input type="hidden" id="prod-form-id" />
 
@@ -991,6 +1069,7 @@ function attachGlobalEvents() {
   });
   document.getElementById('product-form')?.addEventListener('submit', handleProductFormSubmit);
   initProductFormAutoComplete();
+  initCheckBeforeAddSearch();
 
   // Preset emoji chips
   document.querySelectorAll('.emoji-preset-chip').forEach(btn => {
@@ -1692,10 +1771,36 @@ function renderAdminView() {
       <!-- STOCK & PRICE TAB -->
       ${state.adminTab === 'stock' ? `
         <div class="admin-card-box">
-          <div class="admin-card-header">
-            <div>
-              <h3>Fast Stock & Price Manager</h3>
-              <p style="font-size: 0.78rem; color: var(--text-secondary);">Click + / - or toggle stock status to update storefront instantly.</p>
+          <div class="admin-card-header" style="display: flex; flex-direction: column; align-items: stretch; gap: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <h3 style="margin: 0;">Fast Stock & Price Manager</h3>
+                <p style="font-size: 0.78rem; color: var(--text-secondary); margin: 2px 0 0;">Click + / - or toggle stock status to update storefront instantly.</p>
+              </div>
+              <div id="stock-search-count" class="stock-search-count-badge">
+                ${state.products.filter(p => productMatchesSearch(p, state.stockSearchQuery || '')).length} of ${state.products.length} products
+              </div>
+            </div>
+
+            <!-- Live Search Bar in Stock/Price Section -->
+            <div class="admin-search-wrapper" style="position: relative; width: 100%;">
+              <span class="admin-search-icon" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; opacity: 0.6; font-size: 0.95rem;">🔍</span>
+              <input 
+                type="text" 
+                id="stock-search-input" 
+                class="form-input admin-search-input" 
+                placeholder="Search product to update price or stock..." 
+                value="${escapeHtml(state.stockSearchQuery || '')}"
+                autocomplete="off" 
+                style="width: 100%; box-sizing: border-box; padding-left: 38px; padding-right: 36px; height: 42px; font-size: 0.88rem;" 
+              />
+              <button 
+                type="button" 
+                id="btn-stock-search-clear" 
+                class="search-clear-btn" 
+                style="display: ${(state.stockSearchQuery || '').trim() ? 'flex' : 'none'}; position: absolute; right: 10px; top: 50%; transform: translateY(-50%);" 
+                title="Clear search"
+              >✕</button>
             </div>
           </div>
           <div class="table-responsive">
@@ -1710,41 +1815,8 @@ function renderAdminView() {
                   <th>Availability Toggle</th>
                 </tr>
               </thead>
-              <tbody>
-                ${state.products.map(p => `
-                  <tr id="admin-stock-row-${p.id}" class="admin-stock-row" data-id="${p.id}">
-                    <td>
-                      <strong>${p.name}</strong>
-                      <div style="font-size: 0.75rem; color: var(--text-muted);">${p.unit || ''} • ${p.category}</div>
-                    </td>
-                    <td>
-                      <strong style="color: var(--primary-darker); font-size: 1rem;">${formatPKR(p.price)}</strong>
-                    </td>
-                    <td>
-                      <div style="display: flex; gap: 4px; align-items: center;">
-                        <input type="number" class="form-input quick-price-input" data-id="${p.id}" value="${p.price}" style="width: 80px; padding: 4px 6px; font-size: 0.85rem;" />
-                        <button class="btn-admin-action btn-save-price" data-id="${p.id}" style="color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 4px 8px;">Save</button>
-                      </div>
-                    </td>
-                    <td>
-                      <strong style="font-size: 1.1rem; color: ${p.stock <= 0 ? 'var(--danger)' : p.stock <= 5 ? 'var(--warning)' : 'var(--text-primary)'};">
-                        ${p.stock}
-                      </strong>
-                    </td>
-                    <td>
-                      <div style="display: flex; gap: 4px; align-items: center;">
-                        <button class="btn-action-icon btn-stock-dec" data-id="${p.id}" title="Decrease stock by 1">−1</button>
-                        <button class="btn-action-icon btn-stock-inc" data-id="${p.id}" title="Increase stock by 1">+1</button>
-                        <button class="btn-action-icon btn-stock-inc5" data-id="${p.id}" title="Add 10 units" style="width: auto; padding: 0 6px; font-size: 0.75rem;">+10</button>
-                      </div>
-                    </td>
-                    <td>
-                      <button class="stock-badge-toggle ${p.stock > 0 ? 'badge-in-stock' : 'badge-out-stock'}" data-id="${p.id}">
-                        ${p.stock > 0 ? 'In Stock (Click to Mark Out)' : 'Out of Stock (Click to Mark In)'}
-                      </button>
-                    </td>
-                  </tr>
-                `).join('')}
+              <tbody id="stock-table-tbody">
+                ${renderStockTableRowsHtml(state.products.filter(p => productMatchesSearch(p, state.stockSearchQuery || '')))}
               </tbody>
             </table>
           </div>
@@ -2649,62 +2721,11 @@ function attachAdminEvents() {
     });
   });
 
-  // Quick Stock & Price Actions
-  document.querySelectorAll('.btn-stock-dec').forEach(b => {
-    b.addEventListener('click', async () => {
-      const prod = state.products.find(p => p.id === b.dataset.id);
-      if (prod) {
-        const newStock = Math.max(0, prod.stock - 1);
-        await quickUpdateProduct(prod.id, { stock: newStock });
-        renderAdminView();
-      }
-    });
-  });
-
-  document.querySelectorAll('.btn-stock-inc').forEach(b => {
-    b.addEventListener('click', async () => {
-      const prod = state.products.find(p => p.id === b.dataset.id);
-      if (prod) {
-        await quickUpdateProduct(prod.id, { stock: prod.stock + 1 });
-        renderAdminView();
-      }
-    });
-  });
-
-  document.querySelectorAll('.btn-stock-inc5').forEach(b => {
-    b.addEventListener('click', async () => {
-      const prod = state.products.find(p => p.id === b.dataset.id);
-      if (prod) {
-        await quickUpdateProduct(prod.id, { stock: prod.stock + 10 });
-        renderAdminView();
-      }
-    });
-  });
-
-  document.querySelectorAll('.stock-badge-toggle').forEach(b => {
-    b.addEventListener('click', async () => {
-      const prod = state.products.find(p => p.id === b.dataset.id);
-      if (prod) {
-        const newStock = prod.stock > 0 ? 0 : 20;
-        await quickUpdateProduct(prod.id, { stock: newStock });
-        renderAdminView();
-      }
-    });
-  });
-
-  document.querySelectorAll('.btn-save-price').forEach(b => {
-    b.addEventListener('click', async () => {
-      const input = document.querySelector(`.quick-price-input[data-id="${b.dataset.id}"]`);
-      if (input) {
-        const val = Number(input.value);
-        if (!isNaN(val) && val >= 0) {
-          await quickUpdateProduct(b.dataset.id, { price: val });
-          showToast("Price updated successfully!");
-          renderAdminView();
-        }
-      }
-    });
-  });
+  // Quick Stock & Price Actions with live search
+  if (state.adminTab === 'stock') {
+    attachStockSearchListeners();
+    attachStockRowActionListeners();
+  }
 
   // Orders status buttons
   document.querySelectorAll('.status-btn').forEach(b => {
@@ -3310,6 +3331,301 @@ function initProductFormAutoComplete() {
   });
 }
 
+// ==========================================================================
+// STOCK & PRICE SECTION SEARCH & ACTIONS
+// ==========================================================================
+function renderStockTableRowsHtml(productsList) {
+  if (!productsList || productsList.length === 0) {
+    return `
+      <tr>
+        <td colspan="6" style="text-align: center; padding: 36px 16px; color: var(--text-secondary);">
+          <div style="font-size: 1.5rem; margin-bottom: 6px;">🔍</div>
+          <strong>No matching products found</strong>
+          <p style="font-size: 0.8rem; margin: 4px 0 0; color: var(--text-muted);">Try a different English or Urdu spelling.</p>
+        </td>
+      </tr>
+    `;
+  }
+
+  return productsList.map(p => `
+    <tr id="admin-stock-row-${p.id}" class="admin-stock-row" data-id="${p.id}">
+      <td>
+        <strong>${escapeHtml(p.name)}</strong>
+        ${p.urduName ? `<div style="font-size: 0.75rem; color: #047857;" class="urdu-text">${escapeHtml(p.urduName)}</div>` : ''}
+        <div style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(p.unit || '')} • ${escapeHtml(p.category || '')}</div>
+      </td>
+      <td>
+        <strong style="color: var(--primary-darker); font-size: 1rem;">${formatPKR(p.price)}</strong>
+      </td>
+      <td>
+        <div style="display: flex; gap: 4px; align-items: center;">
+          <input type="number" class="form-input quick-price-input" data-id="${p.id}" value="${p.price}" style="width: 80px; padding: 4px 6px; font-size: 0.85rem;" />
+          <button class="btn-admin-action btn-save-price" data-id="${p.id}" style="color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 4px 8px;">Save</button>
+        </div>
+      </td>
+      <td>
+        <strong style="font-size: 1.1rem; color: ${p.stock <= 0 ? 'var(--danger)' : p.stock <= 5 ? 'var(--warning)' : 'var(--text-primary)'};">
+          ${p.stock}
+        </strong>
+      </td>
+      <td>
+        <div style="display: flex; gap: 4px; align-items: center;">
+          <button class="btn-action-icon btn-stock-dec" data-id="${p.id}" title="Decrease stock by 1">−1</button>
+          <button class="btn-action-icon btn-stock-inc" data-id="${p.id}" title="Increase stock by 1">+1</button>
+          <button class="btn-action-icon btn-stock-inc5" data-id="${p.id}" title="Add 10 units" style="width: auto; padding: 0 6px; font-size: 0.75rem;">+10</button>
+        </div>
+      </td>
+      <td>
+        <button class="stock-badge-toggle ${p.stock > 0 ? 'badge-in-stock' : 'badge-out-stock'}" data-id="${p.id}">
+          ${p.stock > 0 ? 'In Stock (Click to Mark Out)' : 'Out of Stock (Click to Mark In)'}
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function attachStockRowActionListeners() {
+  document.querySelectorAll('.btn-stock-dec').forEach(b => {
+    b.onclick = async () => {
+      const prod = state.products.find(p => p.id === b.dataset.id);
+      if (prod) {
+        const newStock = Math.max(0, prod.stock - 1);
+        await quickUpdateProduct(prod.id, { stock: newStock });
+        renderAdminView();
+      }
+    };
+  });
+
+  document.querySelectorAll('.btn-stock-inc').forEach(b => {
+    b.onclick = async () => {
+      const prod = state.products.find(p => p.id === b.dataset.id);
+      if (prod) {
+        await quickUpdateProduct(prod.id, { stock: prod.stock + 1 });
+        renderAdminView();
+      }
+    };
+  });
+
+  document.querySelectorAll('.btn-stock-inc5').forEach(b => {
+    b.onclick = async () => {
+      const prod = state.products.find(p => p.id === b.dataset.id);
+      if (prod) {
+        await quickUpdateProduct(prod.id, { stock: prod.stock + 10 });
+        renderAdminView();
+      }
+    };
+  });
+
+  document.querySelectorAll('.stock-badge-toggle').forEach(b => {
+    b.onclick = async () => {
+      const prod = state.products.find(p => p.id === b.dataset.id);
+      if (prod) {
+        const newStock = prod.stock > 0 ? 0 : 20;
+        await quickUpdateProduct(prod.id, { stock: newStock });
+        renderAdminView();
+      }
+    };
+  });
+
+  document.querySelectorAll('.btn-save-price').forEach(b => {
+    b.onclick = async () => {
+      const input = document.querySelector(`.quick-price-input[data-id="${b.dataset.id}"]`);
+      if (input) {
+        const val = Number(input.value);
+        if (!isNaN(val) && val >= 0) {
+          await quickUpdateProduct(b.dataset.id, { price: val });
+          showToast("Price updated successfully!");
+          renderAdminView();
+        }
+      }
+    };
+  });
+}
+
+function attachStockSearchListeners() {
+  const input = document.getElementById('stock-search-input');
+  const clearBtn = document.getElementById('btn-stock-search-clear');
+  const countBadge = document.getElementById('stock-search-count');
+  const tbody = document.getElementById('stock-table-tbody');
+
+  if (!input) return;
+
+  input.oninput = (e) => {
+    const q = e.target.value;
+    state.stockSearchQuery = q;
+    if (clearBtn) clearBtn.style.display = q.trim() ? 'flex' : 'none';
+
+    const filtered = state.products.filter(p => productMatchesSearch(p, q));
+    if (countBadge) {
+      countBadge.textContent = `${filtered.length} of ${state.products.length} products`;
+    }
+    if (tbody) {
+      tbody.innerHTML = renderStockTableRowsHtml(filtered);
+      attachStockRowActionListeners();
+    }
+  };
+
+  if (clearBtn) {
+    clearBtn.onclick = () => {
+      input.value = '';
+      state.stockSearchQuery = '';
+      clearBtn.style.display = 'none';
+      if (countBadge) {
+        countBadge.textContent = `${state.products.length} of ${state.products.length} products`;
+      }
+      if (tbody) {
+        tbody.innerHTML = renderStockTableRowsHtml(state.products);
+        attachStockRowActionListeners();
+      }
+      input.focus();
+    };
+  }
+}
+
+// ==========================================================================
+// "CHECK BEFORE ADDING" PRE-CHECK SEARCH
+// ==========================================================================
+function initCheckBeforeAddSearch() {
+  const searchInput = document.getElementById('check-prod-search-input');
+  const clearBtn = document.getElementById('btn-check-search-clear');
+  if (!searchInput) return;
+
+  searchInput.addEventListener('input', (e) => {
+    handleCheckBeforeAddInput(e.target.value);
+  });
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      searchInput.value = '';
+      handleCheckBeforeAddInput('');
+      searchInput.focus();
+    });
+  }
+}
+
+function handleCheckBeforeAddInput(rawQuery) {
+  const clearBtn = document.getElementById('btn-check-search-clear');
+  const resultsArea = document.getElementById('check-prod-results-area');
+  const feedbackBanner = document.getElementById('check-prod-feedback-banner');
+  const resultsContainer = document.getElementById('check-prod-results-container');
+
+  if (clearBtn) clearBtn.style.display = rawQuery.trim() ? 'flex' : 'none';
+
+  const query = normalizeProductName(rawQuery);
+  if (!query) {
+    if (resultsArea) resultsArea.style.display = 'none';
+    if (feedbackBanner) feedbackBanner.innerHTML = '';
+    if (resultsContainer) resultsContainer.innerHTML = '';
+    return;
+  }
+
+  if (resultsArea) resultsArea.style.display = 'block';
+
+  // Instant local filtering against all products loaded in admin panel
+  const matches = (state.products || []).filter(p => productMatchesSearch(p, query));
+
+  if (matches.length > 0) {
+    // 1) Small orange warning line: "Already added — edit it below instead of adding again."
+    feedbackBanner.innerHTML = `
+      <div class="check-feedback-line check-feedback-warning" style="background: #fffbeb; color: #92400e; border: 1px solid #fef3c7; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+        <span style="font-size: 0.95rem;">⚠️</span>
+        <span>Already added — edit it below instead of adding again.</span>
+      </div>
+    `;
+
+    // 2) Render result rows: emoji, English name, Urdu name, PKR price, stock badge, and Edit button
+    resultsContainer.innerHTML = matches.map(p => {
+      const theme = getCategoryTheme(p.category);
+      const emoji = p.emoji || getProductEmoji(p.name, p.category);
+      const stockBadge = p.stock <= 0
+        ? '<span class="status-pill status-cancelled">Out of stock</span>'
+        : p.stock <= 5
+          ? `<span class="status-pill status-preparing">Low stock (${p.stock})</span>`
+          : `<span class="status-pill status-delivered">In stock (${p.stock})</span>`;
+
+      return `
+        <div class="check-result-card">
+          <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
+            <div class="admin-table-emoji-box" style="background: ${theme.bg}; border: 1px solid ${theme.border}; width: 34px; height: 34px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); flex-shrink: 0;">${emoji}</div>
+            <div style="min-width: 0; flex: 1;">
+              <div style="display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;">
+                <strong style="font-size: 0.86rem; color: #0f172a;">${escapeHtml(p.name)}</strong>
+                ${p.urduName ? `<span class="urdu-text" style="font-size: 0.78rem; color: #047857;">${escapeHtml(p.urduName)}</span>` : ''}
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px; font-size: 0.76rem; color: var(--text-secondary); margin-top: 2px; flex-wrap: wrap;">
+                <span style="font-weight: 700; color: var(--primary-darker);">${formatPKR(p.price)}</span>
+                <span>• ${escapeHtml(p.unit || '')}</span>
+                ${stockBadge}
+              </div>
+            </div>
+          </div>
+          <div>
+            <button type="button" class="btn-check-jump-edit" data-id="${p.id}" title="Jump to edit this product in Stock & Prices">
+              ✏️ Edit
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    resultsContainer.querySelectorAll('.btn-check-jump-edit').forEach(btn => {
+      btn.onclick = () => {
+        const prodId = btn.dataset.id;
+        closeProductModal();
+        if (state.view !== 'admin') state.view = 'admin';
+        state.adminTab = 'stock';
+        state.stockSearchQuery = '';
+        renderAdminView();
+        setTimeout(() => {
+          const row = document.getElementById(`admin-stock-row-${prodId}`);
+          if (row) {
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            row.classList.remove('highlight-target-row');
+            void row.offsetWidth;
+            row.classList.add('highlight-target-row');
+            const priceInput = row.querySelector('.quick-price-input');
+            if (priceInput) priceInput.focus();
+            setTimeout(() => {
+              row.classList.remove('highlight-target-row');
+            }, 3000);
+          }
+        }, 80);
+      };
+    });
+
+  } else {
+    // 3) Nothing matches: green line + "Add as new" button
+    feedbackBanner.innerHTML = `
+      <div class="check-feedback-line check-feedback-success" style="background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 600; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 0.95rem;">✓</span>
+          <span>Not added yet — you can add it below.</span>
+        </div>
+        <button type="button" id="btn-check-add-new" class="btn-check-add-new">
+          + Add as new
+        </button>
+      </div>
+    `;
+    resultsContainer.innerHTML = '';
+
+    const addNewBtn = document.getElementById('btn-check-add-new');
+    if (addNewBtn) {
+      addNewBtn.onclick = () => {
+        const nameInput = document.getElementById('prod-form-name');
+        if (nameInput) {
+          nameInput.value = rawQuery.trim();
+          triggerAutoUrduTranslation(rawQuery.trim());
+          triggerAutoCategoryAndUnit(rawQuery.trim());
+          triggerAutoProductEmoji(rawQuery.trim());
+          const priceInput = document.getElementById('prod-form-price');
+          if (priceInput) priceInput.focus();
+          else nameInput.focus();
+        }
+      };
+    }
+  }
+}
+
 // Product Modal Handlers
 function openProductModal(prodToEdit = null) {
   state.editingProduct = prodToEdit;
@@ -3331,8 +3647,18 @@ function openProductModal(prodToEdit = null) {
   if (catBadge) catBadge.style.display = 'none';
   if (unitBadge) unitBadge.style.display = 'none';
 
+  const checkSection = document.getElementById('check-before-add-section');
+  const checkDivider = document.getElementById('check-modal-divider');
+  const checkInput = document.getElementById('check-prod-search-input');
+  const checkResultsArea = document.getElementById('check-prod-results-area');
+  const checkClearBtn = document.getElementById('btn-check-search-clear');
+  const checkFeedbackBanner = document.getElementById('check-prod-feedback-banner');
+  const checkResultsContainer = document.getElementById('check-prod-results-container');
+
   if (prodToEdit) {
     title.textContent = `Edit Product: ${prodToEdit.name}`;
+    if (checkSection) checkSection.style.display = 'none';
+    if (checkDivider) checkDivider.style.display = 'none';
     document.getElementById('prod-form-id').value = prodToEdit.id;
     document.getElementById('prod-form-name').value = prodToEdit.name;
     document.getElementById('prod-form-urdu').value = prodToEdit.urduName || '';
@@ -3349,6 +3675,13 @@ function openProductModal(prodToEdit = null) {
     updateProductEmojiPreview(existingEmoji, false);
   } else {
     title.textContent = "Add New Product";
+    if (checkSection) checkSection.style.display = 'block';
+    if (checkDivider) checkDivider.style.display = 'flex';
+    if (checkInput) checkInput.value = '';
+    if (checkClearBtn) checkClearBtn.style.display = 'none';
+    if (checkResultsArea) checkResultsArea.style.display = 'none';
+    if (checkFeedbackBanner) checkFeedbackBanner.innerHTML = '';
+    if (checkResultsContainer) checkResultsContainer.innerHTML = '';
     form.reset();
     document.getElementById('prod-form-id').value = '';
     document.getElementById('prod-form-category').value = 'Grocery';
@@ -3369,6 +3702,12 @@ function closeProductModal() {
   document.getElementById('product-modal')?.classList.remove('active');
   state.editingProduct = null;
   hideSuggestionsDropdown();
+  const checkInput = document.getElementById('check-prod-search-input');
+  const checkResultsArea = document.getElementById('check-prod-results-area');
+  const checkClearBtn = document.getElementById('btn-check-search-clear');
+  if (checkInput) checkInput.value = '';
+  if (checkClearBtn) checkClearBtn.style.display = 'none';
+  if (checkResultsArea) checkResultsArea.style.display = 'none';
 }
 
 async function handleProductFormSubmit(e) {
