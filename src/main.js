@@ -99,25 +99,56 @@ function formatPKR(amount) {
   return `Rs. ${Number(amount || 0).toLocaleString('en-PK')}`;
 }
 
+// Product Name Normalizer for duplicate checks
+function normalizeProductName(name) {
+  if (!name || typeof name !== 'string') return '';
+  return name.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
 // Toast notification helper
-function showToast(message, type = 'success') {
+function showToast(message, type = 'success', action = null) {
   const container = document.getElementById('toast-container');
   if (!container) return;
 
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
-  toast.innerHTML = `
-    <span>${type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}</span>
-    <span>${message}</span>
+
+  const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ';
+
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'toast-content';
+  contentDiv.innerHTML = `
+    <span class="toast-icon">${icon}</span>
+    <span class="toast-message">${message}</span>
   `;
+  toast.appendChild(contentDiv);
+
+  if (action && (action.actionText || action.text)) {
+    const actionBtn = document.createElement('button');
+    actionBtn.type = 'button';
+    actionBtn.className = 'toast-action-btn';
+    actionBtn.textContent = action.actionText || action.text;
+    actionBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof action.onAction === 'function') {
+        action.onAction();
+      } else if (typeof action.onClick === 'function') {
+        action.onClick();
+      }
+      toast.remove();
+    });
+    toast.appendChild(actionBtn);
+  }
+
   container.appendChild(toast);
 
+  const duration = action ? 6500 : 3500;
   setTimeout(() => {
     toast.style.opacity = '0';
     toast.style.transform = 'translateY(10px)';
     toast.style.transition = 'all 0.3s ease';
     setTimeout(() => toast.remove(), 300);
-  }, 3500);
+  }, duration);
 }
 
 // ==========================================================================
@@ -1619,7 +1650,7 @@ function renderAdminView() {
               </thead>
               <tbody>
                 ${state.products.map(p => `
-                  <tr>
+                  <tr id="admin-prod-row-${p.id}" class="admin-prod-row" data-id="${p.id}">
                     <td>
                       <div style="display: flex; align-items: center; gap: 10px;">
                         ${(() => {
@@ -1681,7 +1712,7 @@ function renderAdminView() {
               </thead>
               <tbody>
                 ${state.products.map(p => `
-                  <tr>
+                  <tr id="admin-stock-row-${p.id}" class="admin-stock-row" data-id="${p.id}">
                     <td>
                       <strong>${p.name}</strong>
                       <div style="font-size: 0.75rem; color: var(--text-muted);">${p.unit || ''} • ${p.category}</div>
@@ -3343,7 +3374,49 @@ function closeProductModal() {
 async function handleProductFormSubmit(e) {
   e.preventDefault();
   const id = document.getElementById('prod-form-id').value;
-  const name = document.getElementById('prod-form-name').value.trim();
+  const nameInput = document.getElementById('prod-form-name');
+  const rawName = nameInput ? nameInput.value : '';
+  const normalizedInputName = normalizeProductName(rawName);
+
+  if (!normalizedInputName) return;
+
+  // Duplicate Guard: Compare normalized name against all existing products
+  const duplicate = (state.products || []).find(p => {
+    if (id && p.id === id) {
+      return false; // Ignore product being edited itself
+    }
+    const existingNormalized = normalizeProductName(p.name);
+    return existingNormalized && existingNormalized === normalizedInputName;
+  });
+
+  if (duplicate) {
+    showToast("This product is already added", "error", {
+      actionText: "View existing",
+      onAction: () => {
+        closeProductModal();
+        if (state.view !== 'admin') {
+          state.view = 'admin';
+        }
+        state.adminTab = 'products';
+        renderAdminView();
+        setTimeout(() => {
+          const row = document.getElementById(`admin-prod-row-${duplicate.id}`);
+          if (row) {
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            row.classList.remove('highlight-target-row');
+            void row.offsetWidth;
+            row.classList.add('highlight-target-row');
+            setTimeout(() => {
+              row.classList.remove('highlight-target-row');
+            }, 3000);
+          }
+        }, 60);
+      }
+    });
+    return;
+  }
+
+  const name = rawName.trim();
   const urduName = document.getElementById('prod-form-urdu').value.trim();
   const category = document.getElementById('prod-form-category').value;
   const unit = document.getElementById('prod-form-unit').value.trim();

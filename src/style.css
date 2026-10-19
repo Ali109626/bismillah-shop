@@ -2122,9 +2122,30 @@ img {
   font-weight: 500;
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 12px;
   animation: slideUpToast 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  max-width: 340px;
+  max-width: 440px;
+  box-sizing: border-box;
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.toast-icon {
+  font-weight: 700;
+  font-size: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toast-message {
+  line-height: 1.35;
 }
 
 .toast-success {
@@ -2132,11 +2153,39 @@ img {
 }
 
 .toast-error {
-  border-left: 4px solid var(--danger);
+  background: #b91c1c;
+  border-left: 4px solid #fca5a5;
+  color: #ffffff;
+  box-shadow: 0 10px 25px -5px rgba(185, 28, 28, 0.5), 0 8px 10px -6px rgba(185, 28, 28, 0.5);
 }
 
 .toast-warning {
   border-left: 4px solid var(--warning);
+}
+
+.toast-action-btn {
+  background: #ffffff;
+  color: #b91c1c;
+  border: none;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.toast-action-btn:hover {
+  background: #fef2f2;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.toast-action-btn:active {
+  transform: translateY(0);
 }
 
 @keyframes slideUpToast {
@@ -2148,6 +2197,31 @@ img {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* Row highlight animation for duplicate product navigation */
+@keyframes rowFlashHighlight {
+  0% {
+    background-color: #fee2e2;
+  }
+  20% {
+    background-color: #fecaca;
+  }
+  60% {
+    background-color: #fee2e2;
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.highlight-target-row {
+  outline: 2px solid #ef4444 !important;
+  outline-offset: -2px;
+}
+
+.highlight-target-row td {
+  animation: rowFlashHighlight 3s ease-out forwards !important;
 }
 
 /* Bottom Bar for Mobile Quick Access */
